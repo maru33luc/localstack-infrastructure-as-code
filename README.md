@@ -221,8 +221,48 @@ curl http://localhost:4566/_localstack/health
 ```
 
 ### 4. Choose your deployment method:
-- **CloudFormation**: Follow [Method 1](#method-1-cloudformation)
-- **Terraform**: Follow [Method 2](#method-2-terraform)
+- **CloudFormation**: Follow [Method 1](#method-1-cloudformation) - Ready to use!
+- **Terraform**: Follow [Method 2](#method-2-terraform) - Requires initialization
+
+## ⚠️ Important Notes
+
+### Files Not Included in Repository
+The following files are automatically generated and excluded from Git:
+
+**Terraform:**
+- `.terraform/` - Downloaded when you run `terraform init`
+- `terraform.tfstate` - Created when you run `terraform apply`
+- `lambda-code.zip` - Created when you run the ZIP command
+
+**LocalStack:**
+- `tmp/` - Created by LocalStack for temporary data
+
+**Why excluded?** These files are:
+- ✅ **Large** (providers can be 500MB+)
+- ✅ **Machine-specific** (contain local paths)
+- ✅ **Auto-generated** (recreated on each setup)
+- ✅ **Temporary** (not needed for version control)
+
+### How to Generate Missing Files
+
+**For Terraform method:**
+```bash
+# 1. Initialize Terraform (downloads providers to .terraform/)
+cd terraform
+terraform init
+
+# 2. Create Lambda ZIP file
+powershell Compress-Archive -Path app.py -DestinationPath lambda-code.zip
+
+# 3. Now you can run terraform plan/apply
+terraform plan
+```
+
+**For CloudFormation method:**
+```bash
+# No additional setup needed - code is embedded in the template!
+aws --endpoint-url=http://localhost:4566 cloudformation create-stack ...
+```
 
 ## 🏗️ Project Structure
 
@@ -881,31 +921,25 @@ def handler(event, context):
 
 ### Terraform Steps
 
-1. **Install Terraform:**
-```bash
-# Windows with winget
-winget install HashiCorp.Terraform
+**Prerequisites:** Make sure you have completed the [setup steps](#important-notes) above.
 
-# Or download from: https://terraform.io/downloads
+1. **Initialize Terraform (downloads providers):**
+```bash
+cd terraform
+terraform init
 ```
 
 2. **Create Lambda ZIP:**
 ```bash
-cd terraform
 powershell Compress-Archive -Path app.py -DestinationPath lambda-code.zip
 ```
 
-3. **Initialize Terraform:**
-```bash
-terraform init
-```
-
-4. **View execution plan:**
+3. **View execution plan:**
 ```bash
 terraform plan
 ```
 
-5. **Apply changes:**
+4. **Apply changes:**
 ```bash
 terraform apply
 # Type 'yes' when prompted
