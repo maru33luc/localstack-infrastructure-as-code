@@ -1,0 +1,104 @@
+%YAML 1.1
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'LocalStack Lambda with S3 and API Gateway'
+
+Resources:
+  MyBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: my-local-bucket
+
+  MyLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: my-local-lambda
+      Runtime: python3.9
+      Handler: app.handler
+      Role: !GetAtt 'LambdaRole.Arn'
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          
+          def handler(event, context):
+              try:
+                  # Usar variables de entorno de LocalStack
+                  s3 = boto3.client('s3')
+                  
+                  BUCKET = os.environ['BUCKET_NAME']
+                  body = event.get('body', 'hola localstack')
+              
+                  s3.put_object(
+                      Bucket=BUCKET,
+                      Key='example.txt',
+                      Body=body
+                  )
+              
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps({'message': 'Archivo guardado en S3'})
+                  }
+              except Exception as e:
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({'error': str(e)})
+                  }
+      Environment:
+        Variables:
+          BUCKET_NAME: my-local-bucket
+
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: lambda-execution-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+
+  Api:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: LocalApi
+
+  ApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt 'Api.RootResourceId'
+      PathPart: test
+      RestApiId: !Ref 'Api'
+
+  ApiMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      HttpMethod: POST
+      ResourceId: !Ref 'ApiResource'
+      RestApiId: !Ref 'Api'
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MyLambda.Arn}/invocations'
+
+  LambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref 'MyLambda'
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:apigateway:${AWS::Region}::/restapis/${Api}/stages/*/POST/test'
+
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: ApiMethod
+    Properties:
+      RestApiId: !Ref 'Api'
+      StageName: dev
